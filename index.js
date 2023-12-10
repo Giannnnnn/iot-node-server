@@ -1,17 +1,14 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-
 const mqtt = require('mqtt')
+
 const host = '193.133.195.176'
 const port = '1883'
 const clientId = `mqtt_${Math.random().toString(16).slice(3)}`
-
 const connectUrl = `mqtt://${host}:${port}`
 
-const server = '193.133.195.176:27017';
-const database = 'test';
-
+// Definindo os esquemas para os modelos de dados MongoDB
 const waterLevelSchema = new mongoose.Schema({
     date: String,
     value: String,
@@ -26,27 +23,31 @@ const waterPumpActivationSchema = new mongoose.Schema({
     date: String,
 });
 
+// Criando os modelos MongoDB
 const Waterlevel = mongoose.model('WaterLevel', waterLevelSchema);
 const SoilMoisture = mongoose.model('SoilMoisture', soilMoistureSchema);
 const WaterPumpActivation = mongoose.model('WaterPumpActivation', waterPumpActivationSchema);
 
+// Classe para gerenciar a conexão ao MongoDB e ouvir mensagens MQTT
 class Database {
     constructor() {
         this._connect();
         this._listenTo();
     }
 
+    // Método privado para conectar ao MongoDB
     _connect() {
         mongoose
             .connect(`mongodb://user1:user1@193.133.195.176:27017/waterLevel?authSource=admin`)
             .then(() => {
-                console.log('Database connection successful');
+                console.log('Conexão com o banco de dados MongoDB bem-sucedida');
             })
             .catch((err) => {
-                console.error('Database connection failed');
+                console.error('Falha na conexão com o banco de dados MongoDB');
             });
     }
 
+    // Método privado para configurar a escuta de mensagens MQTT
     _listenTo() {
         const client = mqtt.connect(connectUrl, {
             clientId,
@@ -58,7 +59,7 @@ class Database {
         });
 
         client.on('connect', () => {
-            console.log('Connected');
+            console.log('Conectado');
 
             client.subscribe('distance');
             client.subscribe('moisture');
@@ -88,17 +89,17 @@ class Database {
             switch (topic) {
                 case 'distance':
                     waterLevelLog.save()
-                        .then(() => console.log('Water Level State saved at MongoDB'))
+                        .then(() => console.log('Estado do Nível de Água salvo no MongoDB'))
                         .catch((error) => console.error(error));
                     break;
                 case 'moisture':
                     soilMoistureLog.save()
-                        .then(() => console.log('Soil Moisture State saved at MongoDB'))
+                        .then(() => console.log('Estado da Umidade do Solo salvo no MongoDB'))
                         .catch((error) => console.error(error));
                     break;
                 case 'waterPumpActivation':
                     waterPumpActivationLog.save()
-                        .then(() => console.log('Water Pump Activation Log saved at MongoDB'))
+                        .then(() => console.log('Log de Ativação da Bomba de Água salvo no MongoDB'))
                         .catch((error) => console.error(error));
                     break;
             }
@@ -106,7 +107,7 @@ class Database {
 
         process.on('SIGINT', () => {
             mongoose.connection.close(() => {
-                console.log('MongoDB disconnected through app termination');
+                console.log('MongoDB desconectado pela aplicação');
                 process.exit(0);
             });
         });
@@ -115,19 +116,11 @@ class Database {
 
 module.exports = new Database();
 
+// CONFIGURAÇÃO E INICIALIZAÇÃO DO EXPRESS
 const app = express();
 app.use(cors());
 app.use(express.json());
-
-app.get('/', (req, res) => {
-    res.json({ text: 'Hello World!' });
-});
-
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({ error: 'Something went wrong!' });
-});
-
+// ROTA PARA OBTER A MÉDIA DO NÍVEL DE ÁGUA
 app.get('/average-water-level', async (req, res) => {
     try {
         const lastRecords = await Waterlevel.find().sort({ date: -1 }).limit(10);
@@ -135,10 +128,10 @@ app.get('/average-water-level', async (req, res) => {
         res.json({ average });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ error: 'Erro interno do servidor' });
     }
 });
-
+// ROTA PARA OBTER A MÉDIA DA UMIDADE DO SOLO
 app.get('/average-soil-moisture', async (req, res) => {
     try {
         const lastRecords = await SoilMoisture.find().sort({ date: -1 }).limit(10);
@@ -146,25 +139,25 @@ app.get('/average-soil-moisture', async (req, res) => {
         res.json({ average });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ error: 'Erro interno do servidor' });
     }
 });
-
+// ROTA PARA OBTER OS ÚLTIMOS REGISTROS DE ATIVAÇÃO DA BOMBA D'ÁGUA
 app.get('/last-water-pump-activations', async (req, res) => {
     try {
         const lastActivations = await WaterPumpActivation.find().sort({ date: -1 }).limit(10);
         res.json(lastActivations);
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ error: 'Erro interno do servidor' });
     }
 });
-
+// Função para calcular a média de um array
 function calculateAverage(array) {
     const sum = array.reduce((acc, value) => acc + value, 0);
     return sum / array.length;
 }
-
+// Inicia o servidor Express
 app.listen(3000, () => {
-    console.log(`Example app listening on port ${3000}`);
+    console.log(`Aplicação ouvindo na porta ${3000}`);
 });
